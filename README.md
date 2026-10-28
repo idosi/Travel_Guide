@@ -17,7 +17,7 @@ src/travel_guide/
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) and copy the token.
 2. `cp .env.example .env` and fill in the keys.
-3. Install and run:
+3. Install and run (requires Python 3.11+; the macOS system Python is too old, use `brew install python@3.12`):
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
