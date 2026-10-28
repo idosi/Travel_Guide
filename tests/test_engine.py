@@ -98,3 +98,16 @@ def test_keyboard_two_buttons_per_row():
 
 def test_keyboard_removed_without_options():
     assert isinstance(build_keyboard(GuideReply("x")), ReplyKeyboardRemove)
+
+
+def test_telegram_html_bold_bullets_headings_and_escaping():
+    from travel_guide.adapters.telegram_format import to_telegram_html
+
+    text = "## בודפשט\n- **תוכנית יום** & מסעדות <טובות>\n* ברים"
+    assert to_telegram_html(text) == "<b>בודפשט</b>\n• <b>תוכנית יום</b> &amp; מסעדות &lt;טובות&gt;\n• ברים"
+
+
+def test_telegram_html_leaves_unpaired_asterisks():
+    from travel_guide.adapters.telegram_format import to_telegram_html
+
+    assert to_telegram_html("5 * 3 = 15") == "5 * 3 = 15"
