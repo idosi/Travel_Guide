@@ -3,12 +3,14 @@
 import logging
 
 import anthropic
-from telegram import Update
-from telegram.constants import ChatAction
+from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
+from telegram.constants import ChatAction, ParseMode
+from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
+from travel_guide.adapters.telegram_format import to_telegram_html
 from travel_guide.config import get_settings
-from travel_guide.engine import GuideEngine, InMemorySessionStore
+from travel_guide.engine import GuideEngine, GuideReply, InMemorySessionStore
 
 log = logging.getLogger(__name__)
 
@@ -18,6 +20,8 @@ WELCOME = (
     "Hi! Tell me where you're going and I'll plan it for you."
 )
 TELEGRAM_MAX_LEN = 4096
+# Split the raw text below the limit: HTML escaping and <b> tags make each chunk longer.
+RAW_CHUNK_LEN = 3500
 
 
 def split_message(text: str, limit: int = TELEGRAM_MAX_LEN) -> list[str]:
@@ -40,6 +44,26 @@ def split_message(text: str, limit: int = TELEGRAM_MAX_LEN) -> list[str]:
     return chunks
 
 
+def build_keyboard(reply: GuideReply) -> ReplyKeyboardMarkup | ReplyKeyboardRemove:
+    """Options become tappable buttons, two per row; tapping one sends its label as a message."""
+    if not reply.options:
+        return ReplyKeyboardRemove()
+    rows = [
+        [KeyboardButton(label) for label in reply.options[i : i + 2]]
+        for i in range(0, len(reply.options), 2)
+    ]
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True, one_time_keyboard=True)
+
+
+async def send_formatted(message, text: str, reply_markup=None) -> None:
+    """Send as Telegram HTML; if Telegram rejects the markup, fall back to plain text."""
+    try:
+        await message.reply_text(to_telegram_html(text), parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+    except BadRequest as e:
+        log.warning("HTML rejected by Telegram (%s); sending plain text", e)
+        await message.reply_text(text, reply_markup=reply_markup)
+
+
 def build_app() -> Application:
     settings = get_settings()
     engine = GuideEngine(
@@ -53,13 +77,16 @@ def build_app() -> Application:
 
     async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         engine.reset(str(update.effective_user.id))
-        await update.message.reply_text(WELCOME)
+        await update.message.reply_text(WELCOME, reply_markup=ReplyKeyboardRemove())
 
     async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.chat.send_action(ChatAction.TYPING)
-        answer = await engine.reply(str(update.effective_user.id), update.message.text)
-        for chunk in split_message(answer):
-            await update.message.reply_text(chunk)
+        reply = await engine.reply(str(update.effective_user.id), update.message.text)
+        chunks = split_message(reply.text, RAW_CHUNK_LEN)
+        for chunk in chunks[:-1]:
+            await send_formatted(update.message, chunk)
+        # The keyboard rides on the last chunk so it appears under the question it answers.
+        await send_formatted(update.message, chunks[-1], build_keyboard(reply))
 
     app = Application.builder().token(settings.telegram_bot_token).build()
     app.add_handler(CommandHandler(["start", "new"], start))

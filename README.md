@@ -17,7 +17,7 @@ src/travel_guide/
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) and copy the token.
 2. `cp .env.example .env` and fill in the keys.
-3. Install and run:
+3. Install and run (requires Python 3.11+; the macOS system Python is too old, use `brew install python@3.12`):
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
@@ -30,6 +30,6 @@ Tests: `pytest`
 ## Roadmap
 
 - [x] Step 1: project skeleton, engine separated from Telegram
-- [ ] Step 2: planning conversation flow
+- [x] Step 2: planning conversation flow (reply buttons, focused questions, plan format)
 - [ ] Step 3: Google Places tools (hours, rating, price level) with cache
 - [ ] Step 4: hosting with webhook, logging, per-user rate limit
