@@ -3,12 +3,12 @@
 import logging
 
 import anthropic
-from telegram import Update
+from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.constants import ChatAction
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from travel_guide.config import get_settings
-from travel_guide.engine import GuideEngine, InMemorySessionStore
+from travel_guide.engine import GuideEngine, GuideReply, InMemorySessionStore
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +40,17 @@ def split_message(text: str, limit: int = TELEGRAM_MAX_LEN) -> list[str]:
     return chunks
 
 
+def build_keyboard(reply: GuideReply) -> ReplyKeyboardMarkup | ReplyKeyboardRemove:
+    """Options become tappable buttons, two per row; tapping one sends its label as a message."""
+    if not reply.options:
+        return ReplyKeyboardRemove()
+    rows = [
+        [KeyboardButton(label) for label in reply.options[i : i + 2]]
+        for i in range(0, len(reply.options), 2)
+    ]
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True, one_time_keyboard=True)
+
+
 def build_app() -> Application:
     settings = get_settings()
     engine = GuideEngine(
@@ -53,13 +64,16 @@ def build_app() -> Application:
 
     async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         engine.reset(str(update.effective_user.id))
-        await update.message.reply_text(WELCOME)
+        await update.message.reply_text(WELCOME, reply_markup=ReplyKeyboardRemove())
 
     async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.chat.send_action(ChatAction.TYPING)
-        answer = await engine.reply(str(update.effective_user.id), update.message.text)
-        for chunk in split_message(answer):
+        reply = await engine.reply(str(update.effective_user.id), update.message.text)
+        chunks = split_message(reply.text)
+        for chunk in chunks[:-1]:
             await update.message.reply_text(chunk)
+        # The keyboard rides on the last chunk so it appears under the question it answers.
+        await update.message.reply_text(chunks[-1], reply_markup=build_keyboard(reply))
 
     app = Application.builder().token(settings.telegram_bot_token).build()
     app.add_handler(CommandHandler(["start", "new"], start))

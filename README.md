@@ -30,6 +30,6 @@ Tests: `pytest`
 ## Roadmap
 
 - [x] Step 1: project skeleton, engine separated from Telegram
-- [ ] Step 2: planning conversation flow
+- [x] Step 2: planning conversation flow (reply buttons, focused questions, plan format)
 - [ ] Step 3: Google Places tools (hours, rating, price level) with cache
 - [ ] Step 4: hosting with webhook, logging, per-user rate limit
